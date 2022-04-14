@@ -1,0 +1,5 @@
+# SET(LIBALIB_SRC alib.cc)
+# ADD_LIBRARY(alib SHARED ${LIBALIB_SRC})
+# INSTALL(TARGETS alib alib
+#         LIBRARY DESTINATION lib)
+# INSTALL(FILES alib.h DESTINATION include/alib)
