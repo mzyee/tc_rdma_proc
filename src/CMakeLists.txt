@@ -1,8 +1,17 @@
 ADD_SUBDIRECTORY(include)
 
+INCLUDE_DIRECTORIES(include)
+
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/lib/perf)
+
+set(PROC_SRC
+	env_basic.cc
+    rdma_com.cc)
+
 ADD_EXECUTABLE(maintest main.cc)
-INCLUDE_DIRECTORIES(/usr/local/lib)
-LINK_directories(/usr/locla/lib)
-INCLUDE_DIRECTORIES(/usr/lib64)
-LINK_directories(/usr/lib64)
-# TARGET_LINK_LIBRARIES(maintest libxxx.so)
+
+ADD_EXECUTABLE(sendtest
+            send_pro.cc
+            ${PROC_SRC})
+TARGET_LINK_LIBRARIES(sendtest perf)
+
