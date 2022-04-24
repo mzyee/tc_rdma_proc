@@ -9,8 +9,8 @@
 
 #include "env_basic.h"
 
-class RDMA_Server;
-class RDMA_Client;
+class RDMAServer;
+class RDMAClient;
 
 const uint64_t FIX_BLOCK_LENGTH = (1024 * 1024); // 1 MB
 const uint64_t MAX_MEMORY_LENGTH =	((uint64_t)(16) * (uint64_t)(1024 * 1024 * 1024)); // 16 GB
@@ -106,10 +106,10 @@ private:
 	std::list<pinned_block *>	virtual_outsets;
 };
 
-class Memory_Magr {
+class MemoryMagr {
 public:
-	Memory_Magr() : p_fix_memory(FIX_BLOCK_LENGTH, MAX_MEMORY_LENGTH) {};
-	~Memory_Magr() {};
+	MemoryMagr() : p_fix_memory(FIX_BLOCK_LENGTH, MAX_MEMORY_LENGTH) {};
+	~MemoryMagr() {};
 
 	/* allocate and make mr for a memory block */
 	bool allocate_pinned_memory(ibv_pd *pd, ibv_access_flags flags,

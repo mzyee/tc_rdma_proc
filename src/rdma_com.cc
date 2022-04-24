@@ -1,7 +1,7 @@
 #include "rdma_com.h"
 
 /********** client **********/
-RDMA_Server::RDMA_Server(Environment_Proc *env){
+RDMAServer::RDMAServer(EnvironmentProc *env){
   /* set parameters */
   conn_params.env = env->get_params();
   assert(conn_params.env->machine == SERVER);
@@ -10,7 +10,7 @@ RDMA_Server::RDMA_Server(Environment_Proc *env){
   conn_params.wr_cq_number = 128;
 }
 
-int16_t RDMA_Server::on_connect_request(rdma_cm_id *id) {
+int16_t RDMAServer::on_connect_request(rdma_cm_id *id) {
   /* build ibv connection */
   if (build_connection(id)) {
     return FAILURE;
@@ -30,16 +30,16 @@ int16_t RDMA_Server::on_connect_request(rdma_cm_id *id) {
   return SUCCESS;
 }
 
-int16_t RDMA_Server::on_connection(rdma_cm_id *id) {
+int16_t RDMAServer::on_connection(rdma_cm_id *id) {
   conn_params.connected = true;
 
   /* TODO mzy: init & send meta on connection */
 
-  post_meta_send_wqe();
+  post_meta_send_wr();
   return SUCCESS;
 }
 
-int16_t RDMA_Server::on_disconnect(rdma_cm_id *id) {
+int16_t RDMAServer::on_disconnect(rdma_cm_id *id) {
   assert (id->context == static_cast<void *>(this));
 
   destroy_connection();
@@ -48,7 +48,7 @@ int16_t RDMA_Server::on_disconnect(rdma_cm_id *id) {
   return FAILURE;
 }
 
-int16_t RDMA_Server::on_event(rdma_cm_event *event) {
+int16_t RDMAServer::on_event(rdma_cm_event *event) {
   int16_t ret = SUCCESS;
 
   if (event->event == RDMA_CM_EVENT_CONNECT_REQUEST)
@@ -63,7 +63,7 @@ int16_t RDMA_Server::on_event(rdma_cm_event *event) {
   return ret;
 }
 
-int16_t RDMA_Server::run() {
+int16_t RDMAServer::run() {
   rdma_cm_id **cm_id = &conn_ctx.cm_id_control;
   conn_ctx.cm_channel = rdma_create_event_channel();
   if (conn_ctx.cm_channel == NULL) {
@@ -152,13 +152,13 @@ int16_t RDMA_Server::run() {
   return SUCCESS;
 }
 
-void RDMA_Server::stop() {
+void RDMAServer::stop() {
   rdma_disconnect(conn_ctx.cm_id);
 }
 
 
 /********** client **********/
-RDMA_Client::RDMA_Client(Environment_Proc *env) {
+RDMAClient::RDMAClient(EnvironmentProc *env) {
   /* set parameters */
   conn_params.env = env->get_params();
   assert(conn_params.env->machine == CLIENT);
@@ -168,7 +168,7 @@ RDMA_Client::RDMA_Client(Environment_Proc *env) {
 }
 
 
-int16_t RDMA_Client::on_addr_resolved(rdma_cm_id *id) {
+int16_t RDMAClient::on_addr_resolved(rdma_cm_id *id) {
   assert(conn_params.env->machine == CLIENT);
 
   build_connection(id);
@@ -180,7 +180,7 @@ int16_t RDMA_Client::on_addr_resolved(rdma_cm_id *id) {
   return SUCCESS;
 }
 
-int16_t RDMA_Client::on_route_resolved(rdma_cm_id *id) {
+int16_t RDMAClient::on_route_resolved(rdma_cm_id *id) {
   rdma_conn_param cm_params;
 
   memset(&cm_params, 0, sizeof(cm_params));
@@ -196,7 +196,7 @@ int16_t RDMA_Client::on_route_resolved(rdma_cm_id *id) {
   return SUCCESS;
 }
 
-int16_t RDMA_Client::run() {
+int16_t RDMAClient::run() {
   /* create channel */
   rdma_cm_id **cm_id = &conn_ctx.cm_id;
   conn_ctx.cm_channel = rdma_create_event_channel();
@@ -321,20 +321,20 @@ int16_t RDMA_Client::run() {
   return SUCCESS;
 }
 
-void RDMA_Client::stop() {
+void RDMAClient::stop() {
   rdma_disconnect(conn_ctx.cm_id);
 }
 
-int16_t RDMA_Client::on_connection(rdma_cm_id *id) {
+int16_t RDMAClient::on_connection(rdma_cm_id *id) {
   conn_params.connected = true;
 
   /* TODO mzy: init & send meta on connection */
 
-  post_meta_send_wqe();
+  post_meta_send_wr();
   return SUCCESS;
 }
 
-int16_t RDMA_Client::on_disconnect(rdma_cm_id *id) {
+int16_t RDMAClient::on_disconnect(rdma_cm_id *id) {
   assert (id->context == static_cast<void *>(this));
 
   destroy_connection();
@@ -343,7 +343,7 @@ int16_t RDMA_Client::on_disconnect(rdma_cm_id *id) {
   return FAILURE;
 }
 
-int16_t RDMA_Client::on_event(rdma_cm_event *event) {
+int16_t RDMAClient::on_event(rdma_cm_event *event) {
   int ret = SUCCESS;
 
   if (event->event == RDMA_CM_EVENT_ADDR_RESOLVED)

@@ -31,7 +31,7 @@ bool Pinned_Fix_Memory::allocate_next_block(ibv_pd *pd, ibv_access_flags flags) 
 }
 
 /* allocate and make mr for a memory block */
-bool Memory_Magr::allocate_pinned_memory(ibv_pd *pd, ibv_access_flags flags,
+bool MemoryMagr::allocate_pinned_memory(ibv_pd *pd, ibv_access_flags flags,
 																				 uint64_t len, bool fixed) {
 	if (fixed) {
 		assert(len == p_fix_memory.block_length);
@@ -44,7 +44,7 @@ bool Memory_Magr::allocate_pinned_memory(ibv_pd *pd, ibv_access_flags flags,
 }
 
 /* get mr for pinned memory block */
-ibv_mr *Memory_Magr::get_pinned_mr(uint64_t voff, uint64_t len, bool fixed) {
+ibv_mr *MemoryMagr::get_pinned_mr(uint64_t voff, uint64_t len, bool fixed) {
 	if (fixed) {
 		ibv_mr *mr = NULL;
 		assert(len == p_fix_memory.block_length);

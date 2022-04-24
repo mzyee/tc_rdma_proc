@@ -12,9 +12,6 @@
 #include "perftest_communication.h"
 #include "link_buf.h"
 
-class Environment_Proc;
-class Connection_Proc;
-
 /************** Basic Environment ***************/
 struct env_basic_param {
   char  *ib_devname;
@@ -32,10 +29,10 @@ struct env_basic_param {
   int32_t     cache_line_size;
 };
 
-class Environment_Proc {
+class EnvironmentProc {
 public:
-  Environment_Proc() { init_env_params(); }
-  ~Environment_Proc() {};
+  EnvironmentProc() { init_env_params(); }
+  ~EnvironmentProc() {};
 
   int16_t parse_params(int16_t p_num, char *pars[]);
   int16_t check_env();
@@ -50,13 +47,6 @@ private:
   ibv_context       *env_context;
 
   void init_env_params();
-};
-
-/************** Connection ***************/
-enum MetaType: uint16_t {
-  META_RECV_MR = 0,
-  META_RECV_BUFFER_HEAD,
-  META_CLOSE
 };
 
 #define byte unsigned char
@@ -99,119 +89,4 @@ static inline uint64_t m_read_8(const byte *b) {
   u64 |= m_read_4(b + 4);
   return u64;
 }
-
-struct MetaMessage{
-  MetaType type;
-
-  union {
-    struct ibv_mr mr;
-    uint64_t recv_buffer_head;
-  } data;
-};
-
-struct RdmaMessage{
-  enum Type : uint16_t {
-    MSG_MR = 0,
-    MSG_CMD,
-    MSG_DONE
-  } type;
-  // byte number
-  RdmaMessage(uint32_t l, uint32_t c_l) : length(l) {
-    // TODO mzy: avoid doing malloc every time
-    rdma_pck = (byte *)malloc(length + 12);
-    data = rdma_pck + 8;
-    m_write_4(rdma_pck, RDMA_MESSAGE_MAGIC);
-    m_write_4(rdma_pck + 4, length);
-    m_write_4(rdma_pck + RDMA_MESSAGE_HEAD_LEN + length, RDMA_MESSAGE_MAGIC);
-    pck_len = length + 12;
-  }
-  ~RdmaMessage() {
-    free(rdma_pck);
-  }
-  byte *data;
-  byte *rdma_pck;
-  uint32_t length;
-  uint32_t pck_len;
-};
-
-struct conn_parameter {
-  env_basic_param *env;
-  bool  connected;
-  int   num_of_qps;
-  int   wr_cq_number;
-};
-
-struct conn_context {
-	rdma_cm_id			*cm_id_control;
-	rdma_cm_id			*cm_id;
-  rdma_event_channel		*cm_channel;
-
-  ibv_context		*context;
-	ibv_comp_channel			*comp_channel;
-	ibv_pd				*pd;
-  ibv_cq				*cq;
-  ibv_qp				  *qp;
-	// ibv_cq				*send_cq;
-	// ibv_cq				*recv_cq;
-
-  /* Meta Message memory */
-  ibv_mr *meta_recv_mr;
-  ibv_mr *meta_send_mr;
-  MetaMessage *meta_recv;
-  MetaMessage *meta_send;
-
-  /* cq polling thread */
-  pthread_t cq_poller_thread;
-};
-
-struct conn_callback {
-  // TODO mzy: callbacks
-
-};
-
-class Connection_Proc {
-public:
-    Connection_Proc() {};
-    virtual ~Connection_Proc() {};
-
-    virtual int16_t run() = 0;
-    virtual void stop() = 0;
-
-    /* deal with the completion event */
-    void on_completion(ibv_wc *wc);
-
-protected:
-    /* variables */
-    conn_parameter  conn_params;
-    conn_context    conn_ctx;
-    conn_callback   conn_calls;
-
-    /* functions */
-    virtual int16_t on_connection(rdma_cm_id *id) = 0;
-    virtual int16_t on_disconnect(rdma_cm_id *id) = 0;
-    virtual int16_t on_event(rdma_cm_event *event) = 0;
-
-    // /* deal with received meta message */
-    // void on_meta_message();
-
-    void register_message_memory();
-    int16_t build_connection(rdma_cm_id *id);
-    void destroy_connection();
-
-    /* recv "meta_recv" message from the remote */
-    int16_t post_meta_recv_wqe();
-    /* send "meta_send" message to the remote */
-    int16_t post_meta_send_wqe();
-
-
-    // /* get imm_data of RDMA based on the imm_code and user_data, imm_code no more than
-    // 8 bits, user_data no more than 24 bits */
-    // uint32_t get_rdma_imm_data(uint32_t imm_code, uint32_t user_data);
-
-    // /* Normal Communication */
-    // /* rdma write, Note that: the src_memory must be register */
-    // bool rdma_write(ibv_mr *dest_mr, uint32_t offset, void *src_memory, uint32_t length, ibv_mr *src_mr, bool use_imm_data, uint32_t imm_data, uint64_t op_id = -1);
-
-    // bool rdma_read(ibv_mr *src_mr, uint32_t src_offset, void *dest_memory, uint32_t length, ibv_mr *dest_mr, uint32_t dest_offset, uint64_t op_id = -1);
-};
 

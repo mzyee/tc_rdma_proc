@@ -2,10 +2,11 @@
 #include <getopt.h>
 
 #include "env_basic.h"
+#include "rdma_com.h"
 
 static const char *portStates[] = {"Nop", "Down", "Init", "Armed", "", "Active Defer"};
 
-void Environment_Proc::init_env_params() {
+void EnvironmentProc::init_env_params() {
   env_params.server_port = DEF_PORT;
   env_params.ib_port = DEF_IB_PORT;
   env_params.link_type = LINK_UNSPEC;
@@ -16,7 +17,7 @@ void Environment_Proc::init_env_params() {
   env_params.cache_line_size = DEF_CACHE_LINE_SIZE;
 }
 
-int16_t Environment_Proc::parse_params(int16_t argc, char *argv[]) {
+int16_t EnvironmentProc::parse_params(int16_t argc, char *argv[]) {
 
   static const struct option long_options[] = {
     { name : "ib-dev",  has_arg : 1, flag : NULL, val : 'd' },
@@ -63,7 +64,7 @@ int16_t Environment_Proc::parse_params(int16_t argc, char *argv[]) {
   return SUCCESS;
 }
 
-int16_t Environment_Proc::check_env() {
+int16_t EnvironmentProc::check_env() {
   ibv_device *ib_dev = ctx_find_dev(&env_params.ib_devname);
   if (!ib_dev) {
     std::cerr << "Unable to find the Infiniband/RoCE device!" << std::endl;
@@ -124,7 +125,7 @@ static void *poll_cq(void *ctx) {
     }
 
     while ((num_comp = ibv_poll_cq(ev_cq, 1, &wc)) > 0){
-        Connection_Proc *conn = (Connection_Proc *)(uintptr_t)wc.wr_id;
+        ConnectionProc *conn = (ConnectionProc *)(uintptr_t)wc.wr_id;
         conn->on_completion(&wc);
     }
     if (num_comp < 0){
@@ -137,7 +138,7 @@ static void *poll_cq(void *ctx) {
   return NULL;
 }
 
-void Connection_Proc::on_completion(ibv_wc *wc) {
+void ConnectionProc::on_completion(ibv_wc *wc) {
   // TODO mzy: local completion callback
   if (wc->status != IBV_WC_SUCCESS){
     fprintf(stderr, " error wc status %d\n", wc->status);
@@ -163,7 +164,7 @@ void Connection_Proc::on_completion(ibv_wc *wc) {
   }
 }
 
-void Connection_Proc::register_message_memory() {
+void ConnectionProc::register_message_memory() {
   /* Meta Message */
   conn_ctx.meta_send = (MetaMessage *)malloc(sizeof(MetaMessage));
   conn_ctx.meta_recv = (MetaMessage *)malloc(sizeof(MetaMessage));
@@ -171,7 +172,7 @@ void Connection_Proc::register_message_memory() {
   conn_ctx.meta_recv_mr = ibv_reg_mr(conn_ctx.pd, conn_ctx.meta_recv, sizeof(MetaMessage), IBV_ACCESS_LOCAL_WRITE);
 }
 
-int16_t Connection_Proc::post_meta_recv_wqe() {
+int16_t ConnectionProc::post_meta_recv_wr() {
 	ibv_recv_wr wr;
 	ibv_recv_wr *bad_wr;
 	ibv_sge list;
@@ -188,7 +189,7 @@ int16_t Connection_Proc::post_meta_recv_wqe() {
 	return ibv_post_recv(conn_ctx.qp, &wr, &bad_wr);
 }
 
-int16_t Connection_Proc::post_meta_send_wqe() {
+int16_t ConnectionProc::post_meta_send_wr() {
   ibv_send_wr wr;
   ibv_send_wr *bad_wr;
   ibv_sge list;
@@ -214,7 +215,7 @@ int16_t Connection_Proc::post_meta_send_wqe() {
   return ibv_post_send(conn_ctx.qp, &wr, &bad_wr);
 }
 
-void Connection_Proc::destroy_connection() {
+void ConnectionProc::destroy_connection() {
 
   rdma_destroy_qp(conn_ctx.cm_id);
 
@@ -228,7 +229,7 @@ void Connection_Proc::destroy_connection() {
   rdma_destroy_id(conn_ctx.cm_id);
 }
 
-int16_t Connection_Proc::build_connection(rdma_cm_id *id) {
+int16_t ConnectionProc::build_connection(rdma_cm_id *id) {
   /* 1. build ibv context */
   if (conn_ctx.context) {
     if (conn_ctx.context != id->verbs)
@@ -276,7 +277,7 @@ int16_t Connection_Proc::build_connection(rdma_cm_id *id) {
 
   /* 5. prepare full recv wr for meta */
   for (int32_t i = 0; i < conn_params.wr_cq_number; ++i) {
-    post_meta_recv_wqe();
+    post_meta_recv_wr();
   }
 
   /* other meta in class */
