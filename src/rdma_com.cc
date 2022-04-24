@@ -1,13 +1,10 @@
 #include "rdma_com.h"
 
+/********** client **********/
 RDMA_Server::RDMA_Server(Environment_Proc *env){
   /* set parameters */
-  env_basic_param *params = env->get_params();
-  conn_params.servername = params->servername;
-  conn_params.port = params->port;
-  conn_params.connection_type = params->connection_type;
-  conn_params.machine = params->machine;
-  assert(conn_params.machine == SERVER);
+  conn_params.env = env->get_params();
+  assert(conn_params.env->machine == SERVER);
   conn_params.connected = false;
   conn_params.num_of_qps = 1;
   conn_params.wr_cq_number = 128;
@@ -36,14 +33,18 @@ int16_t RDMA_Server::on_connect_request(rdma_cm_id *id) {
 int16_t RDMA_Server::on_connection(rdma_cm_id *id) {
   conn_params.connected = true;
 
-  /* TODO zheyu: init & send meta on connection */
+  /* TODO mzy: init & send meta on connection */
 
   post_meta_send_wqe();
   return SUCCESS;
 }
 
 int16_t RDMA_Server::on_disconnect(rdma_cm_id *id) {
+  assert (id->context == static_cast<void *>(this));
+
   destroy_connection();
+
+  /* return FAILURE to break waitting */
   return FAILURE;
 }
 
@@ -91,7 +92,7 @@ int16_t RDMA_Server::run() {
 	memset(&conn_param, 0, sizeof(conn_param));
 
 	/* check port */
-	if (check_add_port(&service, conn_params.port, src_ip, &hints, &res)) {
+	if (check_add_port(&service, conn_params.env->server_port, src_ip, &hints, &res)) {
 		fprintf(stderr, "Problem in resolving basic address and port\n");
 		return FAILURE;
 	}
@@ -100,7 +101,8 @@ int16_t RDMA_Server::run() {
 		return FAILURE;
 	}
 	memcpy(&sin, res->ai_addr, sizeof(sin));
-	sin.sin_port = htons((unsigned short)conn_params.port);
+	sin.sin_port = htons((unsigned short)conn_params.env->server_port);
+	freeaddrinfo(res);
 
 	/* bound rdma channel with address:port */
 	if (rdma_bind_addr(conn_ctx.cm_id_control, (struct sockaddr *)&sin)) {
@@ -124,7 +126,7 @@ int16_t RDMA_Server::run() {
 		return FAILURE;
 	}
 
-	conn_ctx.cm_id = (rdma_cm_id *)event->id;
+	conn_ctx.cm_id = event->id;
 	conn_ctx.context = conn_ctx.cm_id->verbs;
 
 	/* retrieve the first pending event, should be
@@ -135,48 +137,44 @@ int16_t RDMA_Server::run() {
   rdma_ack_cm_event(event);
 
   /* working on cm_event */
+  fprintf(stdout, "working on cm_event\n");
   while (rdma_get_cm_event(conn_ctx.cm_channel, &event) == 0) {
     memcpy(&event_copy, event, sizeof(*event));
     rdma_ack_cm_event(event);
 
-    if (on_event(&event_copy))  // TODO mzy: finish all
+    if (on_event(&event_copy))
       break;
   }
 
 	rdma_destroy_id(conn_ctx.cm_id_control);
-	freeaddrinfo(res);
+  rdma_destroy_event_channel(conn_ctx.cm_channel);
 
   return SUCCESS;
 }
 
 void RDMA_Server::stop() {
-    
+  rdma_disconnect(conn_ctx.cm_id);
 }
-
 
 
 /********** client **********/
 RDMA_Client::RDMA_Client(Environment_Proc *env) {
   /* set parameters */
-  env_basic_param *params = env->get_params();
-  conn_params.servername = params->servername;
-  conn_params.port = params->port;
-  conn_params.connection_type = params->connection_type;
-  conn_params.machine = params->machine;
-  assert(conn_params.machine == CLIENT);
+  conn_params.env = env->get_params();
+  assert(conn_params.env->machine == CLIENT);
   conn_params.connected = false;
   conn_params.num_of_qps = 1;
   conn_params.wr_cq_number = 128;
-  conn_params.source_ip = params->source_ip;
 }
 
 
 int16_t RDMA_Client::on_addr_resolved(rdma_cm_id *id) {
-  assert(conn_params.machine == CLIENT);
+  assert(conn_params.env->machine == CLIENT);
 
   build_connection(id);
 
   if (rdma_resolve_route(id, RDMA_TIMEOUT_IN_MS)) {
+    fprintf(stderr, "rdma_resolve_route failed\n");
     return FAILURE;
   }
   return SUCCESS;
@@ -223,7 +221,8 @@ int16_t RDMA_Client::run() {
 	hints.ai_family   = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if (check_add_port(&service, conn_params.port, conn_params.servername, &hints, &res)) {
+	if (check_add_port(&service, conn_params.env->server_port,
+                     conn_params.env->server_ip, &hints, &res)) {
 		fprintf(stderr, "Problem in resolving basic address and port\n");
 		return FAILURE;
 	}
@@ -232,15 +231,7 @@ int16_t RDMA_Client::run() {
 	}
 
 	memcpy(&sin, res->ai_addr, sizeof(sin));
-	sin.sin_port = htons((unsigned short)conn_params.port);
-
-	if (check_add_port(&service, 0x0, conn_params.source_ip, &hints, &res)) {
-    fprintf(stderr, "Problem in resolving basic address and port\n");
-    return FAILURE;
-	}
-  memset(&source_sin, 0x0, sizeof(source_sin));
-  memcpy(&source_sin, res->ai_addr, sizeof(source_sin));
-  source_ptr = (struct sockaddr *)&source_sin;
+	sin.sin_port = htons((unsigned short)conn_params.env->server_port);
 
 	while (1) {
 		if (num_of_retry == 0) {
@@ -278,7 +269,6 @@ int16_t RDMA_Client::run() {
     if (on_addr_resolved(event_copy.id)) {
       return FAILURE;
     }
-    rdma_ack_cm_event(event);
 
     break;
 	}
@@ -286,11 +276,6 @@ int16_t RDMA_Client::run() {
 	while (1) {
 		if (num_of_retry <= 0) {
 			fprintf(stderr, "Received %d times ADDR_ERROR - aborting\n",NUM_OF_RETRIES);
-			return FAILURE;
-		}
-
-		if (rdma_resolve_route(conn_ctx.cm_id, RDMA_TIMEOUT_IN_MS)) {
-			fprintf(stderr, "rdma_resolve_route failed\n");
 			return FAILURE;
 		}
 
@@ -322,11 +307,12 @@ int16_t RDMA_Client::run() {
 	}
 
   /* working on cm_event */
+  fprintf(stdout, "working on cm_event\n");
   while (rdma_get_cm_event(conn_ctx.cm_channel, &event) == 0) {
       memcpy(&event_copy, event, sizeof(*event));
       rdma_ack_cm_event(event);
 
-      if (on_event(&event_copy))  // TODO mzy: finish all
+      if (on_event(&event_copy))
         break;
   }
 
@@ -336,20 +322,23 @@ int16_t RDMA_Client::run() {
 }
 
 void RDMA_Client::stop() {
-
+  rdma_disconnect(conn_ctx.cm_id);
 }
 
 int16_t RDMA_Client::on_connection(rdma_cm_id *id) {
   conn_params.connected = true;
 
-  /* TODO zheyu: init & send meta on connection */
+  /* TODO mzy: init & send meta on connection */
 
   post_meta_send_wqe();
   return SUCCESS;
 }
 
 int16_t RDMA_Client::on_disconnect(rdma_cm_id *id) {
+  assert (id->context == static_cast<void *>(this));
+
   destroy_connection();
+
   /* return FAILURE to break waitting */
   return FAILURE;
 }

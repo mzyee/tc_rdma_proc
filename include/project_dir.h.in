@@ -1,12 +1,3 @@
-/*
- * @Author: your name
- * @Date: 2020-11-29 12:28:07
- * @LastEditTime: 2020-11-29 12:28:08
- * @LastEditors: your name
- * @Description: In User Settings Edit
- * @FilePath: /zheyu.mzy/pfs_test_proc/include/project_dir.h.in
- */
-
 #ifndef __project_dir_h__
 #define __project_dir_h__
 

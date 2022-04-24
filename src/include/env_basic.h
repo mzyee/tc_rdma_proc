@@ -19,9 +19,9 @@ class Connection_Proc;
 struct env_basic_param {
   char  *ib_devname;
   char  *servername;
-  char  *source_ip;
+  char  *server_ip;
+  int32_t     server_port;
 
-  int32_t     port;
   int32_t     ib_port;
   int32_t     link_type;
 
@@ -41,6 +41,9 @@ public:
   int16_t check_env();
 
   env_basic_param *get_params() { return &env_params; }
+  bool is_server() {
+    return env_params.machine == SERVER;
+  }
 
 private:
   env_basic_param   env_params;
@@ -132,14 +135,10 @@ struct RdmaMessage{
 };
 
 struct conn_parameter {
-  char        *servername;
-  uint16_t    port;
-  MachineType machine;
-  char        *source_ip;
-  bool        connected;
-  int         connection_type;
-  int         num_of_qps;
-  int         wr_cq_number;
+  env_basic_param *env;
+  bool  connected;
+  int   num_of_qps;
+  int   wr_cq_number;
 };
 
 struct conn_context {
@@ -180,14 +179,6 @@ public:
 
     /* deal with the completion event */
     void on_completion(ibv_wc *wc);
-
-    // TODO mzy: below
-    // /* register a bulk of local memory and return meta
-    // like mr that used for remote access */
-    // void register_local_memory(size_t size, Memory_Mag *mmg);
-    // /* require a bulk of remote memory and store meta
-    // needed for remote access */
-    // void require_remote_memory(size_t size, Memory_Mag *mmg);
 
 protected:
     /* variables */

@@ -1,42 +1,65 @@
 #include <assert.h>
+#include <getopt.h>
 
 #include "env_basic.h"
 
-static const char *portStates[] = {"Nop","Down","Init","Armed","","Active Defer"};
+static const char *portStates[] = {"Nop", "Down", "Init", "Armed", "", "Active Defer"};
 
 void Environment_Proc::init_env_params() {
-  env_params.port = DEF_PORT;
+  env_params.server_port = DEF_PORT;
   env_params.ib_port = DEF_IB_PORT;
   env_params.link_type = LINK_UNSPEC;
 
   env_params.connection_type = RC;
+  env_params.machine = SERVER;
 
   env_params.cache_line_size = DEF_CACHE_LINE_SIZE;
 }
 
-int16_t Environment_Proc::parse_params(int16_t p_num, char *pars[]) {
-  struct perftest_parameters	user_param;
-  memset(&user_param, 0, sizeof(struct perftest_parameters));
+int16_t Environment_Proc::parse_params(int16_t argc, char *argv[]) {
 
-  int16_t ret_parser = parser(&user_param, pars, p_num);
-  if (ret_parser) {
-      if (ret_parser != VERSION_EXIT && ret_parser != HELP_EXIT)
-          fprintf(stderr," Parser function exited with Error\n");
+  static const struct option long_options[] = {
+    { name : "ib-dev",  has_arg : 1, flag : NULL, val : 'd' },
+    { name : "ib-port",  has_arg : 1, flag : NULL, val : 'i' },
+    { name : "dest_ip",  has_arg : 1, flag : NULL, val : 'J' },
+    { name : "source_ip",  has_arg : 1, flag : NULL, val : 'j' },
+    { name : "dest_port",  has_arg : 1, flag : NULL, val : 'K' },
+    { name : "source_port",  has_arg : 1, flag : NULL, val : 'k' },
+    { name : "server",  has_arg : 0, flag : NULL, val : 'Z' },
+    { name : "client",  has_arg : 0, flag : NULL, val : 'P' },
+    {0}
+  };
+
+  int ch;
+  char *not_int_ptr = NULL;
+  while (1) {
+    ch = getopt_long(argc, argv, "p:d:i:c:J:j:K:k:ZP", long_options, NULL);
+
+    if (ch == -1) {
+      break;
+    }
+
+    switch (ch) {
+      case 'd': { GET_STRING(env_params.ib_devname, strdupa(optarg)); } break;
+      case 'i': {
+        CHECK_VALUE(env_params.ib_port, uint8_t, "IB Port", not_int_ptr);
+        if (env_params.ib_port < MIN_IB_PORT) {
+          fprintf(stderr, "IB Port can't be less than %d\n", MIN_IB_PORT);
+          return FAILURE;
+        }
+      } break;
+      case 'J': { env_params.server_ip = strdup(optarg); } break;
+      case 'j': {} break;
+      case 'K': {CHECK_VALUE(env_params.server_port, int, "Server Port", not_int_ptr);} break;
+      case 'k': {} break;
+      case 'Z': { env_params.machine = SERVER; } break;
+      case 'P': { env_params.machine = CLIENT; }  break;
+    default:
       return FAILURE;
+      break;
+    }
   }
 
-  env_params.ib_devname = strdup(user_param.ib_devname);
-  env_params.servername = strdup(user_param.servername);
-  if (user_param.source_ip)
-    env_params.source_ip = strdup(user_param.source_ip);
-
-  env_params.port = user_param.port;
-  env_params.ib_port = user_param.ib_port;
-  env_params.link_type = user_param.link_type;
-  env_params.connection_type = user_param.connection_type;
-
-  env_params.cache_line_size = user_param.cache_line_size;
-  env_params.machine = user_param.machine;
   return SUCCESS;
 }
 
@@ -81,6 +104,9 @@ int16_t Environment_Proc::check_env() {
   return SUCCESS;
 }
 
+/* We use a cq polling thread to maximum RDMA message throughput.
+NOTE: don't exec long sync task on_completion, instead, to dispatch
+  them if needed. */
 static void *poll_cq(void *ctx) {
   conn_context *conn_ctx = static_cast<conn_context *>(ctx);
   ibv_wc  wc;
@@ -92,7 +118,9 @@ static void *poll_cq(void *ctx) {
     ibv_get_cq_event(conn_ctx->comp_channel, &ev_cq, &ev_ctx);
     ibv_ack_cq_events(ev_cq, 1);
     if (ibv_req_notify_cq(ev_cq, 0)) {
-      // TODO: failover
+      // TODO mzy: failover
+      fprintf(stderr, "poll_cq error ibv_req_notify_cq.");
+      assert(false);
     }
 
     while ((num_comp = ibv_poll_cq(ev_cq, 1, &wc)) > 0){
@@ -100,7 +128,9 @@ static void *poll_cq(void *ctx) {
         conn->on_completion(&wc);
     }
     if (num_comp < 0){
-      // TODO: failover
+      // TODO mzy: failover
+      fprintf(stderr, "poll_cq error ibv_poll_cq.");
+      assert(false);
     }
   }
 
@@ -116,16 +146,19 @@ void Connection_Proc::on_completion(ibv_wc *wc) {
 
   switch (wc->opcode) {
   case IBV_WC_RECV: {
+    fprintf(stdout, "wc opcode IBV_WC_RECV\n");
 
   } break;
   case IBV_WC_RECV_RDMA_WITH_IMM: {
+    fprintf(stdout, "wc opcode IBV_WC_RECV_RDMA_WITH_IMM\n");
 
   } break;
   case IBV_WC_RDMA_READ: {
+    fprintf(stdout, "wc opcode IBV_WC_RDMA_READ\n");
 
   } break;
   default:
-    fprintf(stderr, " error wc opcode %d\n", wc->opcode);
+    fprintf(stdout, "unprocessed wc opcode %d\n", wc->opcode);
     break;
   }
 }
@@ -182,7 +215,17 @@ int16_t Connection_Proc::post_meta_send_wqe() {
 }
 
 void Connection_Proc::destroy_connection() {
-  // TODO mzy: destroy_connection
+
+  rdma_destroy_qp(conn_ctx.cm_id);
+
+  ibv_dereg_mr(conn_ctx.meta_send_mr);
+  ibv_dereg_mr(conn_ctx.meta_recv_mr);
+
+  free(conn_ctx.meta_send);
+  free(conn_ctx.meta_recv);
+
+
+  rdma_destroy_id(conn_ctx.cm_id);
 }
 
 int16_t Connection_Proc::build_connection(rdma_cm_id *id) {
