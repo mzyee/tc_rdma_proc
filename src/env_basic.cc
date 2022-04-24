@@ -177,12 +177,12 @@ int16_t ConnectionProc::post_meta_recv_wr() {
 	ibv_recv_wr *bad_wr;
 	ibv_sge list;
 
-	list.addr   = (uintptr_t)conn_ctx.meta_recv;
+	list.addr   = (uint64_t)conn_ctx.meta_recv;
 	list.length = sizeof(MetaMessage);
 	list.lkey   = conn_ctx.meta_recv_mr->lkey;
 
 	wr.next = NULL;
-	wr.wr_id = (uintptr_t)this;
+	wr.wr_id = (uint64_t)this;
 	wr.sg_list = &list;
 	wr.num_sge = 1;
 
@@ -196,11 +196,11 @@ int16_t ConnectionProc::post_meta_send_wr() {
 
   memset(&wr, 0, sizeof(wr));
 
-	list.addr   = (uintptr_t)conn_ctx.meta_send;
+	list.addr   = (uint64_t)conn_ctx.meta_send;
 	list.length = sizeof(MetaMessage);
 	list.lkey   = conn_ctx.meta_send_mr->lkey;
 
-  wr.wr_id = (uintptr_t)this;
+  wr.wr_id = (uint64_t)this;
   wr.opcode = IBV_WR_SEND;
   wr.sg_list = &list;
   wr.num_sge = 1;

@@ -1,5 +1,55 @@
 #include "rdma_com.h"
 
+/********** base **********/
+int16_t ConnectionProc::rdma_write(rdma_mem_info &info) {
+  return rdma_op(RDMA_REMOTE_WRITE, info);
+}
+
+int16_t ConnectionProc::rdma_read(rdma_mem_info &info) {
+  return rdma_op(RDMA_REMOTE_READ, info);
+}
+
+int16_t ConnectionProc::rdma_op(DmaType_t dma_type, rdma_mem_info &info) {
+  int ret = 0;
+  struct ibv_send_wr *bad_send_work_req = NULL;
+  struct ibv_send_wr send_wr;
+  struct ibv_sge sge;
+
+  sge.lkey = info.src_mr->lkey;
+  sge.addr = info.local_address;
+  sge.length = info.length;
+
+  send_wr.wr_id = (uint64_t)this;
+
+  send_wr.next = NULL;
+  send_wr.sg_list =  &sge;
+  send_wr.num_sge = 1;
+  send_wr.send_flags = IBV_SEND_SIGNALED;
+
+  send_wr.wr.rdma.remote_addr = (uint64_t)(info.dst_mr->addr) + info.offset;
+  send_wr.wr.rdma.rkey = info.dst_mr->rkey;
+
+  if (RDMA_REMOTE_WRITE == dma_type) {
+    if (info.use_imm_data) {
+      send_wr.opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
+      send_wr.imm_data = info.imm_data;
+    } else {
+      send_wr.opcode = IBV_WR_RDMA_WRITE;
+    }
+  } else if (RDMA_REMOTE_READ == dma_type) {
+    send_wr.opcode = IBV_WR_RDMA_READ;
+  } else {
+    assert(false);
+  }
+
+  ret = ibv_post_send(conn_ctx.qp, &send_wr, &bad_send_work_req);
+
+  if (ret) {
+    return FAILURE;
+  }
+  return SUCCESS;
+}
+
 /********** client **********/
 RDMAServer::RDMAServer(EnvironmentProc *env){
   /* set parameters */

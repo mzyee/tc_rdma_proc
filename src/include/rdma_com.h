@@ -6,17 +6,14 @@
 #define RDMA_TIMEOUT_IN_MS 1000
 
 
-enum MetaType: uint16_t {
-  META_RECV_MR = 0,
-  META_RECV_BUFFER_HEAD,
-  META_CLOSE
-};
-
 struct MetaMessage{
-  MetaType type;
+  enum MetaType: uint16_t {
+    META_RECV_MR = 0,
+    META_RECV_MESSAGE
+  } type;
   union {
     struct ibv_mr mr;
-    uint64_t recv_buffer_head;
+    uint64_t messages;
   } data;
 };
 
@@ -61,7 +58,7 @@ struct conn_context {
 	ibv_comp_channel			*comp_channel;
 	ibv_pd				*pd;
   ibv_cq				*cq;
-  ibv_qp				  *qp;
+  ibv_qp				*qp;
 	// ibv_cq				*send_cq;
 	// ibv_cq				*recv_cq;
   /* Meta Message memory */
@@ -86,7 +83,7 @@ struct rdma_mem_info {
 
   bool use_imm_data;
   uint32_t imm_data;
-  void *local_memory;
+  uint64_t local_address;
 };
 
 class ConnectionProc {
@@ -129,9 +126,15 @@ protected:
   // uint32_t get_rdma_imm_data(uint32_t imm_code, uint32_t user_data);
 
 
-  // /* Directly rdma write, Note that: the src_memory must be registered by reletive mr */
-  // bool rdma_write(rdma_mem_info );
-  // bool rdma_read(rdma_mem_info );
+  /* Directly rdma read/write, Note: the memory must be registered by reletive mr */
+  int16_t rdma_write(rdma_mem_info &info);
+  int16_t rdma_read(rdma_mem_info &info);
+
+  typedef enum DmaType {
+    RDMA_REMOTE_WRITE = 1,  // RDMA remote write
+    RDMA_REMOTE_READ = 2  // RDMA remote read
+  } DmaType_t;
+  int16_t rdma_op(DmaType_t dma_type, rdma_mem_info &info);
 };
 
 class RDMAServer : public ConnectionProc {
