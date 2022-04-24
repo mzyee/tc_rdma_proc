@@ -187,7 +187,6 @@ int16_t RDMAServer::run() {
   rdma_ack_cm_event(event);
 
   /* working on cm_event */
-  fprintf(stdout, "working on cm_event\n");
   while (rdma_get_cm_event(conn_ctx.cm_channel, &event) == 0) {
     memcpy(&event_copy, event, sizeof(*event));
     rdma_ack_cm_event(event);
@@ -357,13 +356,12 @@ int16_t RDMAClient::run() {
 	}
 
   /* working on cm_event */
-  fprintf(stdout, "working on cm_event\n");
   while (rdma_get_cm_event(conn_ctx.cm_channel, &event) == 0) {
-      memcpy(&event_copy, event, sizeof(*event));
-      rdma_ack_cm_event(event);
+    memcpy(&event_copy, event, sizeof(*event));
+    rdma_ack_cm_event(event);
 
-      if (on_event(&event_copy))
-        break;
+    if (on_event(&event_copy))
+      break;
   }
 
   rdma_destroy_event_channel(conn_ctx.cm_channel);
@@ -397,13 +395,13 @@ int16_t RDMAClient::on_event(rdma_cm_event *event) {
   int ret = SUCCESS;
 
   if (event->event == RDMA_CM_EVENT_ADDR_RESOLVED)
-      ret = on_addr_resolved(event->id);
+    ret = on_addr_resolved(event->id);
   else if (event->event == RDMA_CM_EVENT_ROUTE_RESOLVED)
-      ret = on_route_resolved(event->id);
+    ret = on_route_resolved(event->id);
   else if (event->event == RDMA_CM_EVENT_ESTABLISHED)
-      ret = on_connection(event->id);
+    ret = on_connection(event->id);
   else if (event->event == RDMA_CM_EVENT_DISCONNECTED)
-      ret = on_disconnect(event->id);
+    ret = on_disconnect(event->id);
   else {
     ret = FAILURE;
   }

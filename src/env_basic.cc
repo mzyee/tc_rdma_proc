@@ -5,6 +5,17 @@
 #include "rdma_com.h"
 
 static const char *portStates[] = {"Nop", "Down", "Init", "Armed", "", "Active Defer"};
+static const struct option long_options[] = {
+  { name : "ib-dev",  has_arg : 1, flag : NULL, val : 'd' },
+  { name : "ib-port",  has_arg : 1, flag : NULL, val : 'i' },
+  { name : "dest_ip",  has_arg : 1, flag : NULL, val : 'J' },
+  { name : "source_ip",  has_arg : 1, flag : NULL, val : 'j' },
+  { name : "dest_port",  has_arg : 1, flag : NULL, val : 'K' },
+  { name : "source_port",  has_arg : 1, flag : NULL, val : 'k' },
+  { name : "server",  has_arg : 0, flag : NULL, val : 'Z' },
+  { name : "client",  has_arg : 0, flag : NULL, val : 'P' },
+  {0}
+};
 
 void EnvironmentProc::init_env_params() {
   env_params.server_port = DEF_PORT;
@@ -18,19 +29,6 @@ void EnvironmentProc::init_env_params() {
 }
 
 int16_t EnvironmentProc::parse_params(int16_t argc, char *argv[]) {
-
-  static const struct option long_options[] = {
-    { name : "ib-dev",  has_arg : 1, flag : NULL, val : 'd' },
-    { name : "ib-port",  has_arg : 1, flag : NULL, val : 'i' },
-    { name : "dest_ip",  has_arg : 1, flag : NULL, val : 'J' },
-    { name : "source_ip",  has_arg : 1, flag : NULL, val : 'j' },
-    { name : "dest_port",  has_arg : 1, flag : NULL, val : 'K' },
-    { name : "source_port",  has_arg : 1, flag : NULL, val : 'k' },
-    { name : "server",  has_arg : 0, flag : NULL, val : 'Z' },
-    { name : "client",  has_arg : 0, flag : NULL, val : 'P' },
-    {0}
-  };
-
   int ch;
   char *not_int_ptr = NULL;
   while (1) {

@@ -5,7 +5,6 @@
 #define RDMA_SERVER_IP "172.18.158.94"
 #define RDMA_TIMEOUT_IN_MS 1000
 
-
 struct MetaMessage{
   enum MetaType: uint16_t {
     META_RECV_MR = 0,
@@ -97,11 +96,22 @@ public:
   /* deal with the completion event */
   void on_completion(ibv_wc *wc);
 
+  bool is_alive() {
+    return thread_alive.load();
+  }
+  void set_alive (bool is_alive) {
+    thread_alive.store(is_alive);
+  }
+
+  bool is_server() {
+    return (conn_params.env->machine == SERVER);
+  }
 protected:
   /* variables */
   conn_parameter  conn_params;
   conn_context    conn_ctx;
   conn_callback   conn_calls;
+  std::atomic_bool  thread_alive;
 
   /* functions */
   virtual int16_t on_connection(rdma_cm_id *id) = 0;

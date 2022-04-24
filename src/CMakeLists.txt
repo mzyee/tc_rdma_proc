@@ -12,8 +12,8 @@ set(PROC_SRC
 
 ADD_EXECUTABLE(maintest main.cc)
 
-ADD_EXECUTABLE(sendtest
-            send_pro.cc
+ADD_EXECUTABLE(tctest
+            tc_pro.cc
             ${PROC_SRC})
-TARGET_LINK_LIBRARIES(sendtest perf)
+TARGET_LINK_LIBRARIES(tctest perf)
 
